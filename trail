@@ -1,0 +1,111 @@
+#!/usr/bin/env zsh
+
+TRAIL_DIR="$HOME/Library/Application Support/Trail"
+TRAIL_BIN_DIR="$TRAIL_DIR/bin"
+TRAIL_SITES_DIR="$TRAIL_DIR/sites"
+CADDYFILE="$TRAIL_DIR/Caddyfile"
+REPO_URL="https://raw.githubusercontent.com/emmadesilva/trailphp/main"
+
+command=$1
+argument=$2
+
+function show_help {
+    echo "🏕️ Trail PHP CLI"
+    echo "Usage:"
+    echo "  trail install <version>  Install a PHP version (e.g., 8.3, 8.4)"
+    echo "  trail use <version>      Switch the active PHP version"
+    echo "  trail link [domain]      Serve current directory at <domain>.test over HTTPS"
+    echo "  trail update             Update the Trail CLI to the latest version"
+}
+
+case $command in
+    install)
+        if [ -z "$argument" ]; then
+            echo "❌ Please specify a PHP version (e.g., trail install 8.3)"
+            exit 1
+        fi
+        echo "==> Installing PHP $argument..."
+        brew install shivammathur/php/php@$argument
+        $0 use $argument
+        ;;
+
+    use)
+        if [ -z "$argument" ]; then
+            echo "❌ Please specify a PHP version (e.g., trail use 8.3)"
+            exit 1
+        fi
+        
+        echo "==> Stopping current PHP services..."
+        brew services list | grep php | awk '{print $1}' | while read service; do
+            brew services stop "$service"
+        done
+
+        echo "==> Unlinking current PHP..."
+        brew unlink php || true
+        brew link --force --overwrite "shivammathur/php/php@$argument"
+
+        echo "==> Starting PHP $argument service..."
+        brew services start "shivammathur/php/php@$argument"
+        echo "✅ Now using PHP $argument"
+        ;;
+
+    link)
+        target_dir=$(pwd)
+        
+        if [ -z "$argument" ]; then
+            raw_name=$(basename "$target_dir")
+        else
+            raw_name="$argument"
+        fi
+        
+        base_name="${raw_name%.test}"
+        full_domain="${base_name}.test"
+
+        if [ -d "$target_dir/public" ]; then
+            web_root="$target_dir/public"
+        else
+            web_root="$target_dir"
+        fi
+
+        site_file="$TRAIL_SITES_DIR/$full_domain.caddy"
+
+        echo "==> Linking $full_domain to $web_root..."
+        
+        # Explicitly tell Caddy to use its offline local Certificate Authority
+        cat <<EOF > "$site_file"
+https://$full_domain {
+    tls internal
+    root * "$web_root"
+    php_fastcgi 127.0.0.1:9000
+    file_server
+}
+EOF
+        echo "==> Ensuring Caddy is running and reloading configuration (requires sudo)..."
+        if ! sudo caddy reload --config "$CADDYFILE" >/dev/null 2>&1; then
+            echo "    Caddy wasn't running. Starting it now..."
+            sudo caddy start --config "$CADDYFILE" >/dev/null 2>&1
+        fi
+
+        echo "==> Registering $full_domain in /etc/hosts (requires sudo)..."
+        if ! grep -q "[[:space:]]$full_domain" /etc/hosts; then
+            echo "127.0.0.1 $full_domain" | sudo tee -a /etc/hosts > /dev/null
+        else
+            echo "==> $full_domain is already in /etc/hosts."
+        fi
+
+        echo "✅ Site linked! Access it at https://$full_domain"
+        echo "🔒 (macOS may ask for your password once to trust the new Caddy local certificate)"
+        ;;
+
+    update)
+        echo "==> Updating Trail CLI..."
+        # We use a date string query param to force GitHub to bypass its cache
+        curl -sL "$REPO_URL/trail?v=\$(date +%s)" -o "$TRAIL_BIN_DIR/trail"
+        chmod +x "$TRAIL_BIN_DIR/trail"
+        echo "✅ Trail CLI updated successfully!"
+        ;;
+
+    *)
+        show_help
+        ;;
+esac
