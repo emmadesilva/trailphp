@@ -40,8 +40,11 @@ case $command in
             brew services stop "$service"
         done
 
-        echo "==> Unlinking current PHP..."
-        brew unlink php || true
+        echo "==> Unlinking all PHP versions..."
+        # Find all installed php formulas (php, php@8.2, php@8.3, etc.) and boldly unlink them all
+        brew list | grep -E '^php(@[0-9]+\.[0-9]+)?$' | xargs brew unlink >/dev/null 2>&1 || true
+
+        echo "==> Linking PHP $argument..."
         brew link --force --overwrite "shivammathur/php/php@$argument"
 
         echo "==> Starting PHP $argument service..."
@@ -71,7 +74,6 @@ case $command in
 
         echo "==> Linking $full_domain to $web_root..."
         
-        # Explicitly tell Caddy to use its offline local Certificate Authority
         cat <<EOF > "$site_file"
 https://$full_domain {
     tls internal
@@ -99,7 +101,6 @@ EOF
 
     update)
         echo "==> Updating Trail CLI..."
-        # We use a date string query param to force GitHub to bypass its cache
         curl -sL "$REPO_URL/trail?v=\$(date +%s)" -o "$TRAIL_BIN_DIR/trail"
         chmod +x "$TRAIL_BIN_DIR/trail"
         echo "✅ Trail CLI updated successfully!"
