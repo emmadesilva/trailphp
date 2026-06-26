@@ -41,7 +41,6 @@ case $command in
         done
 
         echo "==> Unlinking all PHP versions..."
-        # Find all installed php formulas (php, php@8.2, php@8.3, etc.) and boldly unlink them all
         brew list | grep -E '^php(@[0-9]+\.[0-9]+)?$' | xargs brew unlink >/dev/null 2>&1 || true
 
         echo "==> Linking PHP $argument..."
@@ -49,6 +48,8 @@ case $command in
 
         echo "==> Starting PHP $argument service..."
         brew services start "shivammathur/php/php@$argument"
+
+        echo "$argument" > "$TRAIL_DIR/php-version"
         echo "✅ Now using PHP $argument"
         ;;
 
