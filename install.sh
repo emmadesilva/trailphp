@@ -40,7 +40,27 @@ echo "==> Downloading Trail CLI..."
 curl -sL "$REPO_URL/trail?v=$(date +%s)" -o "$TRAIL_BIN_DIR/trail"
 chmod +x "$TRAIL_BIN_DIR/trail"
 
-# 5. Configure Caddy Base File
+# 5. Create the PHP proxy script
+echo "==> Creating PHP proxy..."
+cat > "$TRAIL_BIN_DIR/php" <<'PHPPROXY'
+#!/usr/bin/env zsh
+TRAIL_DIR="$HOME/Library/Application Support/Trail"
+PHP_VERSION_FILE="$TRAIL_DIR/php-version"
+
+if [ -f "$PHP_VERSION_FILE" ]; then
+    PHP_VERSION=$(cat "$PHP_VERSION_FILE")
+    PHP_BIN="$(brew --prefix "shivammathur/php/php@$PHP_VERSION" 2>/dev/null)/bin/php"
+    if [ -x "$PHP_BIN" ]; then
+        exec "$PHP_BIN" "$@"
+    fi
+fi
+
+# Fallback to the Homebrew-linked php
+exec "$(brew --prefix)/bin/php" "$@"
+PHPPROXY
+chmod +x "$TRAIL_BIN_DIR/php"
+
+# 6. Configure Caddy Base File
 CADDYFILE="$TRAIL_DIR/Caddyfile"
 if [ ! -f "$CADDYFILE" ]; then
     echo "==> Creating base Caddy configuration..."
@@ -48,14 +68,14 @@ if [ ! -f "$CADDYFILE" ]; then
     echo "import sites/*.caddy" > "$CADDYFILE"
 fi
 
-# 6. Add to PATH in .zshrc
+# 7. Add to PATH in .zshrc
 if ! grep -q "$TRAIL_BIN_DIR" "$HOME/.zshrc"; then
     echo "==> Adding Trail to your PATH..."
     echo "\n# Trail PHP CLI" >> "$HOME/.zshrc"
     echo "export PATH=\"\$PATH:$TRAIL_BIN_DIR\"" >> "$HOME/.zshrc"
 fi
 
-# 7. Start base services
+# 8. Start base services
 echo "==> Stopping any old user-level Caddy services..."
 brew services stop caddy 2>/dev/null || true
 
