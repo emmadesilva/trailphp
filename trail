@@ -14,6 +14,7 @@ function show_help {
     echo "Usage:"
     echo "  trail install <version>  Install a PHP version (e.g., 8.3, 8.4)"
     echo "  trail use <version>      Switch the active PHP version"
+    echo "  trail isolate <version>  Pin the current directory to a PHP version"
     echo "  trail link [domain]      Serve current directory at <domain>.test over HTTPS"
     echo "  trail update             Update the Trail CLI to the latest version"
 }
@@ -57,6 +58,20 @@ case $command in
         echo "TRAIL_GLOBAL_PHP_BIN=$php_bin" > "$TRAIL_DIR/php-config"
 
         echo "✅ Now using PHP $argument"
+        ;;
+
+    isolate)
+        if [ -z "$argument" ]; then
+            echo "❌ Please specify a PHP version (e.g., trail isolate 8.2)"
+            exit 1
+        fi
+        if [ ! -f "$TRAIL_DIR/php-bins/$argument" ]; then
+            echo "❌ PHP $argument is not installed. Run: trail install $argument"
+            exit 1
+        fi
+        echo "$argument" > "$(pwd)/.php-version"
+        echo "✅ This directory will use PHP $argument"
+        echo "   ($(pwd)/.php-version)"
         ;;
 
     link)
