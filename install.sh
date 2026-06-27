@@ -15,6 +15,7 @@ echo "==> Setting up Trail directories..."
 mkdir -p "$TRAIL_DIR"
 mkdir -p "$TRAIL_BIN_DIR"
 mkdir -p "$TRAIL_SITES_DIR"
+mkdir -p "$TRAIL_DIR/php-bins"
 
 # 2. Check for Homebrew
 if ! command -v brew &> /dev/null; then
@@ -45,17 +46,31 @@ echo "==> Creating PHP proxy..."
 cat > "$TRAIL_BIN_DIR/php" <<'PHPPROXY'
 #!/usr/bin/env zsh
 TRAIL_DIR="$HOME/Library/Application Support/Trail"
-PHP_VERSION_FILE="$TRAIL_DIR/php-version"
 
-if [ -f "$PHP_VERSION_FILE" ]; then
-    PHP_VERSION=$(cat "$PHP_VERSION_FILE")
-    PHP_BIN="$(brew --prefix "shivammathur/php/php@$PHP_VERSION" 2>/dev/null)/bin/php"
-    if [ -x "$PHP_BIN" ]; then
-        exec "$PHP_BIN" "$@"
+# Walk up from CWD looking for a .php-version file (per-directory override)
+dir=$(pwd)
+while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/.php-version" ]]; then
+        version=$(<"$dir/.php-version")
+        version="${version%%$'\n'*}"  # first line only, strip newline
+        bin_cache="$TRAIL_DIR/php-bins/$version"
+        if [[ -f "$bin_cache" ]]; then
+            php_bin=$(<"$bin_cache")
+            [[ -x "$php_bin" ]] && exec "$php_bin" "$@"
+        fi
+        break
     fi
+    dir="${dir:h}"
+done
+
+# Fall back to cached global binary (set by `trail use`)
+global_config="$TRAIL_DIR/php-config"
+if [[ -f "$global_config" ]]; then
+    source "$global_config"
+    [[ -x "$TRAIL_GLOBAL_PHP_BIN" ]] && exec "$TRAIL_GLOBAL_PHP_BIN" "$@"
 fi
 
-# Fallback to the Homebrew-linked php
+# Last resort: whatever Homebrew has linked
 exec "$(brew --prefix)/bin/php" "$@"
 PHPPROXY
 chmod +x "$TRAIL_BIN_DIR/php"
