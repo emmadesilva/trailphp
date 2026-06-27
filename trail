@@ -34,7 +34,7 @@ case $command in
             echo "❌ Please specify a PHP version (e.g., trail use 8.3)"
             exit 1
         fi
-        
+
         echo "==> Stopping current PHP services..."
         brew services list | grep php | awk '{print $1}' | while read service; do
             brew services stop "$service"
@@ -49,19 +49,25 @@ case $command in
         echo "==> Starting PHP $argument service..."
         brew services start "shivammathur/php/php@$argument"
 
+        echo "==> Caching PHP $argument binary path..."
+        php_bin="$(brew --prefix "shivammathur/php/php@$argument")/bin/php"
+        mkdir -p "$TRAIL_DIR/php-bins"
+        echo "$php_bin" > "$TRAIL_DIR/php-bins/$argument"
         echo "$argument" > "$TRAIL_DIR/php-version"
+        echo "TRAIL_GLOBAL_PHP_BIN=$php_bin" > "$TRAIL_DIR/php-config"
+
         echo "✅ Now using PHP $argument"
         ;;
 
     link)
         target_dir=$(pwd)
-        
+
         if [ -z "$argument" ]; then
             raw_name=$(basename "$target_dir")
         else
             raw_name="$argument"
         fi
-        
+
         base_name="${raw_name%.test}"
         full_domain="${base_name}.test"
 
@@ -74,7 +80,7 @@ case $command in
         site_file="$TRAIL_SITES_DIR/$full_domain.caddy"
 
         echo "==> Linking $full_domain to $web_root..."
-        
+
         cat <<EOF > "$site_file"
 https://$full_domain {
     tls internal
